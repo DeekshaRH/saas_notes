@@ -1,38 +1,58 @@
-import bcrypt from 'bcrypt';
-import { getConnection } from '../../../lib/db.js';
+import { getConnection } from '../../../lib/db';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+const SECRET = process.env.JWT_SECRET || 'supersecret_jwt_key';
+
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+// Helper functions for MySQL queries
+async function getAsync(query, params) {
+  const conn = await getConnection();
+  const [results] = await conn.execute(query, params);
+  await conn.end();
+  return results[0] || null;
+}
 
 export default async function handler(req, res) {
-  const { email, password } = req.body;
+  cors(res);
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password required' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const conn = await getConnection();
-    const [rows] = await conn.query('SELECT * FROM users WHERE email = ?', [email]);
-    await conn.end();
-
-    if (rows.length === 0) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = rows[0];
-
-    if (!user.password) {
-      return res.status(500).json({ message: 'User has no password set' });
+    const user = await getAsync('SELECT * FROM users WHERE email = ?', [email]);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Return success (you can generate JWT here)
-    res.status(200).json({ message: 'Login successful', user: { email: user.email, role: user.role } });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, tenant: user.tenant_slug },
+      SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({ token, user: { id: user.id, email: user.email, role: user.role, tenant: user.tenant_slug } });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 }
