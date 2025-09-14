@@ -1,4 +1,4 @@
-import { init, allAsync, getAsync, runAsync } from '../../../lib/db';
+import { init, allAsync, getAsync, runAsync } from '../../../lib/db.js';
 import jwt from 'jsonwebtoken';
 
 const SECRET = process.env.JWT_SECRET || 'supersecret_jwt_key';

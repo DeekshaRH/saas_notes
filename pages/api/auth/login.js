@@ -1,4 +1,4 @@
-import { init, getAsync } from '../../../lib/db';
+import { init, getAsync } from '../../../lib/db.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
