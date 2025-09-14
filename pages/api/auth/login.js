@@ -1,4 +1,4 @@
-import { getConnection } from '../../../lib/db';
+import { init, getAsync } from '../../../lib/db';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
@@ -15,50 +15,33 @@ export default async function handler(req, res) {
   cors(res);
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
-  }
-
-  let conn;
   try {
-    conn = await getConnection();
+    await init(); // initialize DB
 
-    const [rows] = await conn.execute(
-      'SELECT * FROM users WHERE email = ?',
-      [email]
-    );
-
-    const user = rows[0];
+    const user = await getAsync('SELECT * FROM users WHERE email = ?', [email]);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch)
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!passwordMatch) return res.status(401).json({ error: 'Invalid credentials' });
 
     // Generate JWT
     const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        tenant: user.tenant_slug
-      },
+      { id: user.id, email: user.email, role: user.role, tenant: user.tenant_slug },
       SECRET,
       { expiresIn: '1d' }
     );
 
-    res.status(200).json({ token, user: { id: user.id, email: user.email, role: user.role, tenant: user.tenant_slug } });
+    res.status(200).json({
+      token,
+      user: { id: user.id, email: user.email, role: user.role, tenant: user.tenant_slug },
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Server error' });
-  } finally {
-    if (conn) await conn.end();
   }
 }
