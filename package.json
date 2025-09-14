@@ -1,0 +1,23 @@
+{
+  "type": "module",
+  "name": "multi-tenant-notes-saas",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
+    "cors": "2.8.5",
+    "dotenv": "^17.2.2",
+    "jsonwebtoken": "9.0.2",
+    "mysql2": "3.5.0",
+    "next": "13.5.8",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  }
+}

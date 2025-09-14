@@ -1,0 +1,4 @@
+body { font-family: Arial, sans-serif; padding: 20px; }
+input, button, textarea { padding: 8px; margin: 6px 0; width: 100%; max-width: 500px; }
+.note { border: 1px solid #ddd; padding: 8px; margin: 8px 0; }
+.header { display:flex; gap:10px; align-items:center; }
