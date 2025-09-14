@@ -1,16 +1,12 @@
-import { getConnection } from '../../../lib/db';
+import { init, allAsync, getAsync, runAsync } from '../../../lib/db';
 import jwt from 'jsonwebtoken';
 
 const SECRET = process.env.JWT_SECRET || 'supersecret_jwt_key';
 
-// Enable CORS for all origins
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-// Verify JWT token
 function auth(req) {
   const token = req.headers.authorization;
   if (!token) throw new Error('No token provided');
@@ -19,67 +15,40 @@ function auth(req) {
 
 export default async function handler(req, res) {
   cors(res);
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  let conn;
   try {
     const user = auth(req);
-    conn = await getConnection();
+    await init(); // ensure DB connection
 
     if (req.method === 'GET') {
-      const [notes] = await conn.execute(
-        'SELECT * FROM notes WHERE tenant_slug = ?',
-        [user.tenant]
-      );
-      const [tenantRows] = await conn.execute(
-        'SELECT * FROM tenants WHERE slug = ?',
-        [user.tenant]
-      );
-      const tenant = tenantRows[0] || {};
+      const notes = await allAsync('SELECT * FROM notes WHERE tenant_slug = ?', [user.tenant]);
+      const tenant = await getAsync('SELECT * FROM tenants WHERE slug = ?', [user.tenant]);
       const count = notes.length;
       const limitReached = tenant.plan === 'free' && count >= 3;
-
-      return res.status(200).json({ notes, limitReached });
+      return res.json({ notes, limitReached });
     }
 
-    if (req.method === 'POST') {
+    else if (req.method === 'POST') {
       const body = req.body;
-
       if (!['admin', 'member'].includes(user.role))
         return res.status(403).json({ error: 'Forbidden' });
 
-      const [tenantRows] = await conn.execute(
-        'SELECT * FROM tenants WHERE slug = ?',
-        [user.tenant]
-      );
-      const tenant = tenantRows[0] || {};
-
-      const [notes] = await conn.execute(
-        'SELECT * FROM notes WHERE tenant_slug = ?',
-        [user.tenant]
-      );
-
+      const tenant = await getAsync('SELECT * FROM tenants WHERE slug = ?', [user.tenant]);
+      const notes = await allAsync('SELECT * FROM notes WHERE tenant_slug = ?', [user.tenant]);
       if (tenant.plan === 'free' && notes.length >= 3)
         return res.status(403).json({ error: 'Note limit reached' });
 
-      const [result] = await conn.execute(
+      const result = await runAsync(
         'INSERT INTO notes (title, content, tenant_slug, owner_id) VALUES (?, ?, ?, ?)',
         [body.title || '', body.content || '', user.tenant, user.id]
       );
 
-      return res.status(200).json({
-        id: result.insertId,
-        title: body.title || '',
-        content: body.content || ''
-      });
+      return res.json({ id: result.insertId, title: body.title, content: body.content });
     }
 
-    res.status(405).json({ error: 'Method not allowed' });
+    else {
+      res.status(405).end(); // Method Not Allowed
+    }
   } catch (e) {
-    console.error(e);
     res.status(401).json({ error: e.message });
-  } finally {
-    if (conn) await conn.end();
   }
 }
